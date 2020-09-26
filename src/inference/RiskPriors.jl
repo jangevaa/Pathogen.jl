@@ -13,6 +13,6 @@ struct RiskPriors{T} <: AbstractRisk{T}
 end
 
 
-function Base.show(io::IO, x::RiskPriors{T}) where T <: EpidemicModel
+function Base.show(io::IO, x::RiskPriors{T}) where T <: DiseaseStateSequence
   return print(io, "$T model risk function priors")
 end

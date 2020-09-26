@@ -2,12 +2,12 @@ function loglikelihood(rp::RiskParameters{T},
                        rf::RiskFunctions{T},
                        events::Events{T},
                        pop::Population,
-                       starting_states::Vector{DiseaseState};
+                       starting_states::DiseaseStates;
                        loglikelihood_output::Bool=true,
                        transmission_rates_output::Bool=true,
                        transmissions_output::Bool=true,
                        early_decision_value::Float64=-Inf,
-                       transmission_rate_cache::Union{Nothing, TransmissionRateCache}=nothing) where T <: EpidemicModel
+                       transmission_rate_cache::Union{Nothing, TransmissionRateCache}=nothing) where T <: DiseaseStateSequence
   # Initialize
   ll = 0.0
   transmissions = Int64[]
@@ -22,9 +22,9 @@ function loglikelihood(rp::RiskParameters{T},
   last_event_switch = false
   local last_event
   for i = 1:length(event_order)
-    id, state_index = Tuple(CartesianIndices((events.individuals,
-                                        length(_state_progressions[T][2:end])))[event_order[i]])
-    new_state = _state_progressions[T][state_index+1]
+    id, state_index = Tuple(CartesianIndices((individuals(events),
+                                        length(convert(DiseaseStates, T)[2:end])))[event_order[i]])
+    new_state = convert(DiseaseStates, T)[state_index+1]
     time = s.events[new_state][id]
     if time == -Inf
       @debug "Skipping event $i" Event{T}(time, id, new_state)

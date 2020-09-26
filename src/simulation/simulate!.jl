@@ -1,4 +1,4 @@
-function simulate!(sim::Simulation{T}; tmax::Float64=Inf, nmax::Int64=100000, pmax::Float64=Inf) where T <: EpidemicModel
+function simulate!(sim::Simulation{T}; tmax::Float64=Inf, nmax::Int64=100000, pmax::Float64=Inf) where T <: DiseaseStateSequence
   if tmax <= 0.0
     @error "The simulation time maximum must be > 0.0"
   elseif nmax < 1

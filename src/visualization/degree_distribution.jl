@@ -6,7 +6,9 @@ end
 @recipe function plot(x::TN) where {TN <: Union{TNDistribution, TransmissionNetwork}}
   seriestype := :histogram
   legend --> :none
-  xlab --> "Out degree"
-  ylab --> "Frequency"
-  _outdegree(x)
+  xguide --> "Out degree"
+  yguide --> "Frequency"
+  od = _outdegree(x)
+  bins --> 0:ceil(max(od))
+  od
 end

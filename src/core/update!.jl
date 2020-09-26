@@ -1,11 +1,11 @@
 function update!(events::Events{T},
-                 event::Event{T}) where T <: EpidemicModel
+                 event::Event{T}) where T <: DiseaseStateSequence
   events[event.new_state][event.individual] = event.time
   return events
 end
 
-function update!(states::Vector{DiseaseState},
-                 event::Event{T}) where T <: EpidemicModel
+function update!(states::DiseaseStates,
+                 event::Event{T}) where T <: DiseaseStateSequence
   states[event.individual] = event.new_state
   return states
 end
@@ -29,12 +29,12 @@ end
 
 function update!(tr::TransmissionRates,
                  event::Event{T},
-                 states::Vector{DiseaseState},
+                 states::DiseaseStates,
                  pop::Population,
                  rf::RiskFunctions{T},
                  rp::RiskParameters{T};
                  xzero::Bool=false,
-                 transmission_rate_cache::Union{Nothing, TransmissionRateCache}=nothing) where T <: EpidemicModel
+                 transmission_rate_cache::Union{Nothing, TransmissionRateCache}=nothing) where T <: DiseaseStateSequence
   id = event.individual
   if _new_transmission(event) && xzero
     tr.external[id] = 0.0
@@ -43,13 +43,13 @@ function update!(tr::TransmissionRates,
   if event.new_state == State_I
     if transmission_rate_cache == nothing
       transmissibility = rf.transmissibility(rp.transmissibility, pop, id)
-      @inbounds @simd for i in findall(states .== Ref(State_S))
+      @simd for i in findall(states .== Ref(State_S))
         tr.internal[id, i] = rf.susceptibility(rp.susceptibility, pop, i) *
-                                    rf.infectivity(rp.infectivity, pop, i, id) *
-                                    transmissibility
+                             rf.infectivity(rp.infectivity, pop, i, id) *
+                             transmissibility
       end
     else
-      @inbounds @simd for i in findall(states .== Ref(State_S))
+      @simd for i in findall(states .== Ref(State_S))
         if transmission_rate_cache.internal[id, i] == nothing
           tr.internal[id, i] = rf.susceptibility(rp.susceptibility, pop, i) *
                                rf.infectivity(rp.infectivity, pop, i, id) *
@@ -69,10 +69,10 @@ end
 function update!(rates::EventRates{T},
                  tr::TransmissionRates,
                  event::Event{T},
-                 states::Vector{DiseaseState},
+                 states::DiseaseStates,
                  pop::Population,
                  rf::RiskFunctions{T},
-                 rp::RiskParameters{T}) where T <: EpidemicModel
+                 rp::RiskParameters{T}) where T <: DiseaseStateSequence
   id = event.individual
   if event.new_state == State_E
     rates.exposure[id] = 0.0
@@ -82,17 +82,17 @@ function update!(rates::EventRates{T},
   elseif event.new_state == State_I
     rates.infection[id] = 0.0
     @logmsg LogLevel(-5000) "Infection rate for i = $id updated" λ = rates.infection[id]
-    if T in [SEIR; SIR]
+    if State_R ∈ T
       rates.removal[id] = rf.removal(rp.removal, pop, id)
       @logmsg LogLevel(-5000) "Removal rate for i = $id updated" λ = rates.removal[id]
     end
-    if T in [SEIR; SEI]
+    if State_E ∈ T
       @simd for i in findall(states .== Ref(State_S))
         # This assumes `TransmissionRates` already updated!
         rates.exposure[i] += tr.internal[id, i]
         @logmsg LogLevel(-5000) "Exposure rate total for i = $id updated"  λ = rates.exposure[id]
       end
-    elseif T in [SIR; SI]
+    elseif State_E ∉ T
       @simd for i in findall(states .== Ref(State_S))
         # This assumes `TransmissionRates` already updated!
         rates.infection[i] += tr.internal[id, i]
@@ -122,11 +122,11 @@ end
 function update!(tr::TransmissionRates,
                  rates::EventRates{T},
                  event::Event{T},
-                 states::Vector{DiseaseState},
+                 states::DiseaseStates,
                  pop::Population,
                  rf::RiskFunctions{T},
                  rp::RiskParameters{T};
-                 transmission_rate_cache::Union{Nothing, TransmissionRateCache}=nothing) where T <: EpidemicModel
+                 transmission_rate_cache::Union{Nothing, TransmissionRateCache}=nothing) where T <: DiseaseStateSequence
   update!(tr, event, states, pop, rf, rp, transmission_rate_cache=transmission_rate_cache)
   update!(rates, tr, event, states, pop, rf, rp)
   return tr, rates

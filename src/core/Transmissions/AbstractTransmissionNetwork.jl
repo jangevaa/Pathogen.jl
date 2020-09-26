@@ -25,4 +25,3 @@ function Base.sum(x::TN, i::Integer) where {TN <: AbstractTN}
   end
   return x.external[i] + sum(x.internal[:, i])
 end
-

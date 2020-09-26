@@ -7,8 +7,8 @@ end
                    pop::Population,
                    events::Events{T},
                    time::Float64;
-                   show_individuals=true::Bool,
-                   show_states=true::Bool) where T <: EpidemicModel
+                   show_individuals=true,
+                   show_states=true) where T <: DiseaseStateSequence
   if show_states & !show_individuals
     @warn "Will not show disease states without also showing individuals"
   end
@@ -21,8 +21,8 @@ end
   linecolor --> :black
   axis --> nothing
   titlefontcolor --> :black
-  framestyle --> :none
-  n = pop.individuals
+  framestyle --> :box
+  n = individuals(pop)
   susceptible = _ids_by_state(events, State_S, time)
   for i = 1:n
     if i ∉ susceptible
@@ -50,9 +50,21 @@ end
   end
 end
 
+@recipe function f(
+  sim::Simulation{T, M},
+  time::Float64;
+  show_individuals=true,
+  show_states=true) where {
+  T <: DiseaseStateSequence,
+  M <: ILM}
+  show_individuals := show_individuals
+  show_states := show_states
+  sim.transmission_network, sim.population, sim.events, time
+end
+
 @recipe function f(tn::TransmissionNetwork,
                    pop::Population;
-                   show_individuals=true::Bool) where T <: EpidemicModel
+                   show_individuals=true)
   xguide --> ""
   yguide --> ""
   legend --> :none
@@ -62,8 +74,8 @@ end
   axis --> nothing
   titlefontcolor --> :black
   linecolor --> :black
-  framestyle --> :none
-  n = pop.individuals
+  framestyle --> :box
+  n = individuals(pop)
   for i = 1:n
     if !tn.external[i] & any(tn.internal[:, i])
       @series begin

@@ -10,7 +10,7 @@ end
 
 @recipe function f(tn::TNDistribution,
                    pop::Population;
-                   show_individuals=true::Bool) where T <: EpidemicModel
+                   show_individuals=true::Bool) where T <: DiseaseStateSequence
   xguide --> ""
   yguide --> ""
   legend --> :none
@@ -18,10 +18,10 @@ end
   ylims --> extrema(pop.risks[!, :y]) .+ (sum(extrema(pop.risks[!, :y]).*(-1,1)) .* (-0.05, 0.05))
   aspect_ratio := :equal
   axis --> nothing
-  framestyle --> :none
+  framestyle --> :box
   linecolor --> :black
-  n = pop.individuals
-  for i = 1:n, j =1:n
+  n = individuals(pop)
+  for i = 1:n, j = 1:n
     if tn.internal[j, i] > 0.0
       @series begin
         x, y, density = _transmission_pathway_density(pop, tn, i, j)

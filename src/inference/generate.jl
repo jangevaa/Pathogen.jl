@@ -1,7 +1,8 @@
-function generate(::Type{Transmission},
-                  tr::TransmissionRates,
-                  tnd::Nothing,
-                  id::I) where {I <: Integer, T <: EpidemicModel}
+function generate(
+  ::Type{Transmission},
+  tr::TransmissionRates,
+  tnd::Nothing,
+  id::Int64)
   external_or_internal = Weights([tr.external[id];
                                   sum(tr.internal[:, id])])
   if sum(external_or_internal) == 0.0
@@ -17,10 +18,11 @@ function generate(::Type{Transmission},
   end
 end
 
-function generate(::Type{Transmission},
-                  tr::TransmissionRates,
-                  tnd::TNDistribution,
-                  id::I) where {I <: Integer, T <: EpidemicModel}
+function generate(
+  ::Type{Transmission},
+  tr::TransmissionRates,
+  tnd::TNDistribution,
+  id::Int64)
   internalweights = tr.internal[:, id] .* tnd.internal[:, id]
   external_or_internal = Weights([tr.external[id] * tnd.external[id];
                                  sum(internalweights)])
@@ -37,11 +39,12 @@ function generate(::Type{Transmission},
   end
 end
 
-function generate(::Type{TransmissionNetwork},
-                  starting_states::Vector{DiseaseState},
-                  tr::TransmissionRates,
-                  tnd::Union{Nothing, TNDistribution},
-                  ids::Vector{I}) where {I <: Integer}
+function generate(
+  ::Type{TransmissionNetwork},
+  starting_states::DiseaseStates,
+  tr::TransmissionRates,
+  tnd::Union{Nothing, TNDistribution},
+  ids::Vector{Int64})
   tn = TransmissionNetwork(starting_states)
   for i in ids
     tx = generate(Transmission, tr, tnd, i)
@@ -50,20 +53,49 @@ function generate(::Type{TransmissionNetwork},
   return tn
 end
 
-function generate(::Type{TransmissionNetwork},
-                  tr::TransmissionRates,
-                  mcmc::MCMC,
-                  ids::Vector{I}) where {I <: Integer}
+function generate(
+  ::Type{TransmissionNetwork},
+  tr::TransmissionRates,
+  mcmc::MCMC,
+  ids::Vector{Int64})
   return generate(TransmissionNetwork, mcmc.starting_states, tr, mcmc.transmission_network_prior, ids)
 end
 
-function generate(::Type{Events},
-                  obs::EventObservations{T},
-                  extents::EventExtents{T}) where T <: EpidemicModel
-  events = Events{T}(obs.individuals)
-  exposed_state = T in [SEIR; SEI]
-  removed_state = T in [SEIR; SIR]
-  for i = 1:obs.individuals
+function generate(
+  ::Type{TransmissionNetwork},
+  lasttn::TransmissionNetwork,
+  tr::TransmissionRates,
+  tnd::Union{Nothing, TNDistribution},
+  ids)
+  tn = copy(lasttn)
+  for i in ids
+    tn.external[i] = 0
+    tn.internal[:, i] .= 0
+    tx = generate(Transmission, tr, tnd, i)
+    update!(tn, tx)
+  end
+  return tn
+end
+
+function generate(
+  ::Type{TransmissionNetwork},
+  lasttn::TransmissionNetwork,
+  tr::TransmissionRates,
+  mcmc::MCMC,
+  ids)
+  return generate(TransmissionNetwork, lasttn, tr, mcmc.transmission_network_prior, ids)
+end
+
+function generate(
+  ::Type{Events},
+  obs::EventObservations{T, M},
+  extents::EventExtents{T}) where {
+  T <: DiseaseStateSequence,
+  M <: ILM}
+  events = Events{T}(individuals(obs))
+  exposed_state = State_E ∈ T
+  removed_state = State_R ∈ T
+  for i = 1:individuals(obs)
     if obs.infection[i] == -Inf
       update!(events, Event{T}(-Inf, i, State_I))
       if exposed_state
@@ -94,16 +126,21 @@ function generate(::Type{Events},
   return events
 end
 
-function generate(::Type{Events}, mcmc::MCMC{T}) where T <: EpidemicModel
+function generate(
+  ::Type{Events},
+  mcmc::MCMC{T}) where {
+  T <: DiseaseStateSequence}
   return generate(Events, mcmc.event_observations, mcmc.event_extents)
 end
 
-function generate(::Type{Event},
-                  last_event::Event{T},
-                  σ::Float64,
-                  extents::EventExtents{T},
-                  obs::EventObservations,
-                  events::Events{T}) where T <: EpidemicModel
+function generate(
+  ::Type{Event},
+  last_event::Event{T},
+  σ::Float64,
+  extents::EventExtents{T},
+  obs::EventObservations,
+  events::Events{T}) where {
+  T <: DiseaseStateSequence}
   lowerbound, upperbound = _bounds(last_event, extents, obs, events)
   time = rand(truncated(Normal(_time(last_event), σ),
                         lowerbound,
@@ -111,13 +148,15 @@ function generate(::Type{Event},
   return Event(time, last_event)
 end
 
-function generate(::Type{Event},
-                  last_event::Event{T},
-                  σ::Float64,
-                  extents::EventExtents{T},
-                  obs::EventObservations,
-                  events::Events{T},
-                  network::TransmissionNetwork) where T <: EpidemicModel
+function generate(
+  ::Type{Event},
+  last_event::Event{T},
+  σ::Float64,
+  extents::EventExtents{T},
+  obs::EventObservations,
+  events::Events{T},
+  network::TransmissionNetwork) where {
+  T <: DiseaseStateSequence}
   lowerbound, upperbound = _bounds(last_event, extents, obs, events, network)
   time = rand(truncated(Normal(_time(last_event), σ),
                         lowerbound,
@@ -125,15 +164,18 @@ function generate(::Type{Event},
   return Event(time, last_event)
 end
 
-function generate(::Type{RiskParameters{T}}, rpriors::RiskPriors{T}) where T <: EpidemicModel
+function generate(
+  ::Type{RiskParameters{T}},
+  rpriors::RiskPriors{T}) where {
+  T <: DiseaseStateSequence}
   sparks = Float64[rand(x) for x in rpriors.sparks]
   susceptibility = Float64[rand(x) for x in rpriors.susceptibility]
   infectivity = Float64[rand(x) for x in rpriors.infectivity]
   transmissibility = Float64[rand(x) for x in rpriors.transmissibility]
-  if T in [SEIR; SEI]
+  if State_E ∈ T
     latency = Float64[rand(x) for x in rpriors.latency]
   end
-  if T in [SEIR; SIR]
+  if State_R ∈ T
     removal = Float64[rand(x) for x in rpriors.removal]
   end
   if T == SEIR
@@ -163,19 +205,42 @@ function generate(::Type{RiskParameters{T}}, rpriors::RiskPriors{T}) where T <: 
   end
 end
 
-function generate(::Type{RiskParameters}, mcmc::MCMC{T}) where T <: EpidemicModel
+function generate(::Type{RiskParameters}, mcmc::MCMC{T}) where T <: DiseaseStateSequence
   return generate(RiskParameters{T}, mcmc.risk_priors)
 end
 
-function generate(::Type{RiskParameters{T}},
-                  last_rparams::RiskParameters{T},
-                  Σ::Array{Float64, 2}) where T <: EpidemicModel
+function generate(
+  ::Type{RiskParameters{T}},
+  last_rparams::RiskParameters{T},
+  Σ::Array{Float64, 2}) where {
+  T <: DiseaseStateSequence}
   rparams_vector = rand(MvNormal(convert(Vector{Float64}, last_rparams), Σ))
   return _like(last_rparams, rparams_vector)
 end
 
-function generate(::Type{RiskParameters{T}},
-                  mc::MarkovChain{T},
-                  Σ::Array{Float64, 2}) where T <: EpidemicModel
+function generate(
+  ::Type{RiskParameters{T}},
+  mc::MarkovChain{T},
+  Σ::Array{Float64, 2}) where {
+  T <: DiseaseStateSequence}
   return generate(RiskParameters{T}, mc.risk_parameters[end], Σ)
+end
+
+function generate(
+  ::Type{SM},
+  priors::Vector{UnivariateDistribution}) where {
+  SM <: NucleicAcidSubstitutionModel}
+  return SM([rand(x) for x in priors])
+end
+
+function generate(
+  ::Type{SM},
+  last_sm::SM,
+  Σ::Array{Float64, 2}) where {
+  SM <: NucleicAcidSubstitutionModel}
+  if size(Σ) == (0,0)
+    return last_sm
+  else
+    return SM(rand(MvNormal([getproperty(last_sm, θ) for θ in [fieldnames(SM)...]], Σ)), false)
+  end
 end

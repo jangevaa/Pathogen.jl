@@ -1,4 +1,4 @@
-struct RiskFunctions{T <: EpidemicModel}
+struct RiskFunctions{T <: DiseaseStateSequence}
   sparks::Union{Nothing, Function}
   susceptibility::Union{Nothing, Function}
   infectivity::Union{Nothing, Function}
@@ -13,6 +13,6 @@ struct RiskFunctions{T <: EpidemicModel}
 end
 
 
-function Base.show(io::IO, x::RiskFunctions{T}) where T <: EpidemicModel
+function Base.show(io::IO, x::RiskFunctions{T}) where T <: DiseaseStateSequence
   return print(io, "$T model risk functions")
 end

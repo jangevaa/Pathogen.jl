@@ -1,27 +1,36 @@
-function _count_by_state(events::EventObservations{T},
-                         state::DiseaseState,
-                         time::Float64) where T <: EpidemicModel
-  local n_ids
-  if state == State_I && T ∈ [SEIR, SIR]
-    nextstate = State_R
-    n_ids = sum((events[state] .<= Ref(time)) .& (events[nextstate] .> Ref(time))) # E/I at or before time and I/R after time
-    n_ids += sum((events[state] .<= Ref(time)) .& isnan.(events[nextstate])) # E/I at or before time and never I/R 
+function _count_by_state(
+  events::EventObservations{T, M},
+  state::DiseaseState,
+  time::Float64) where {
+    T <: DiseaseStateSequence,
+    M <: ILM}
+  n_ids = 0
+  if state == State_I && State_R ∈ T
+  # E/I at or before time and I/R after time or never
+    for i = 1:individuals(events)
+      n_ids += events[state][i] <= time && ((events[State_R][i] > time) || (events[State_R][i] === NaN))
+    end
   else
-    n_ids = sum(events[state] .<= Ref(time)) # I/R at or before time
+    for i = 1:individuals(events)
+      n_ids += events[state][i] <= time
+    end
   end
   @debug "$n_ids individual(s) observered in state $state at t = $time"
   return n_ids
 end
 
-function _obs_curve(events::EventObservations{T},
-                         state::DiseaseState,
-                         min::Float64,
-                         max::Float64) where T <: EpidemicModel
+function _obs_curve(
+  events::EventObservations{T, M},
+  state::DiseaseState,
+  min::Float64,
+  max::Float64) where {
+    T <: DiseaseStateSequence,
+    M <: ILM}
   if min >= max
     @error "Minimum time must be less than maximum time"
   end
   local times
-  if state == State_I && T ∈ [SEIR, SIR]
+  if state == State_I && State_R ∈ T
     times = events[[State_I; State_R]][:]
   else
     times = events[state]
@@ -30,46 +39,57 @@ function _obs_curve(events::EventObservations{T},
   sort!(times)
   insert!(times, 1, min)
   push!(times, max)
-  counts = [_count_by_state(events, state, t) for t in times]
+  counts = _count_by_state.(Ref(events), Ref(state), times)
   return times, counts
 end
 
-@recipe function f(events::EventObservations{T},
-                   state::DiseaseState,
-                   min::Float64,
-                   max::Float64) where T<: EpidemicModel
+@recipe function f(
+  events::EventObservations{T, M},
+  state::DiseaseState,
+  min::Float64,
+  max::Float64) where {
+    T <: DiseaseStateSequence,
+    M <: ILM}
   xguide --> "Time"
   yguide --> "N"
-  xlims --> (min - 1.0, max + 1.0)
   linewidth --> 2.0
-  linecolor --> :cornflowerblue
+  linecolor --> _state_color(state)
   label --> ""
   seriestype --> :steppost
   _obs_curve(events, state, min, max)
 end
 
-@recipe function f(events::EventObservations{T},
-                   state::DiseaseState) where T <: EpidemicModel
+@recipe function f(
+  events::EventObservations{T, M},
+  state::DiseaseState) where {
+    T <: DiseaseStateSequence,
+    M <: ILM}
   events, state, 0.0, maximum(events)
 end
 
-@recipe function f(events::EventObservations{T},
-                   min::Float64,
-                   max::Float64) where T<: EpidemicModel
+@recipe function f(
+  events::EventObservations{T, M},
+  min::Float64,
+  max::Float64) where {
+    T <: DiseaseStateSequence,
+    M <: ILM}
   @series begin
-    linecolor --> :lightgreen
+    linecolor --> _state_color(State_I)
     label --> "I"
     events, State_I, min, max
   end
-  if T in [SEIR; SIR]
+  if State_R ∈ T
     @series begin
-      linecolor --> :yellow
+      linecolor --> _state_color(State_R)
       label --> "R"
       events, State_R, min, max
     end
   end
 end
 
-@recipe function f(events::EventObservations{T}) where T <: EpidemicModel
-  events, 0.0, maximum(events)
+@recipe function f(
+  events::EventObservations{T, M}) where {
+    T <: DiseaseStateSequence,
+    M <: ILM}
+  events, minimum(events), maximum(events)
 end
